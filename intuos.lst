@@ -1,0 +1,1306 @@
+Turbo Assembler	 Version 4.1	    10-03-15 18:07:22	    Page 1
+intuos.asm
+
+
+
+      1					 .486p
+      2	00000000			 model flat
+      3					 ideal
+      4
+      5					 ; screen size
+      6		  =0500			 xMaxScreen=1280
+      7		  =0320			 yMaxScreen=800
+      8
+      9					 extrn DosClose:near
+     10					 extrn DosCreateThread:near
+     11					 extrn DosExit:near
+     12					 extrn DosExitList:near
+     13					 extrn DosOpen:near
+     14					 extrn DosSetPriority:near
+     15					 extrn DosSleep:near
+     16					 extrn DosSuspendThread:near
+     17					 extrn DosWrite:near
+     18
+     19	00000000			 stack 8192
+     20
+     21	00002000			 dataseg
+     22	00000000  5C 44	45 56 5C 58 53+	 szScreen db '\DEV\XSMOUSE$',0
+     23		  4D 4F	55 53 45 24 00
+     24	0000000E  5C 44	45 56 5C 24 49+	 szTablet db '\DEV\$INTUOS$',0
+     25		  4E 54	55 4F 53 24 00
+     26
+     27	0000001C			 udataseg
+     28	00000000  ????????		 ActionTaken dd	?
+     29	00000004  ????????		 BytesDone dd ?
+     30	00000008  ????????		 fhScreen dd ?
+     31	0000000C  ????????		 fhTablet dd ?
+     32
+     33	00000010			 udataseg
+     34	00000010  ????????		 tidTablet dd ?
+     35
+     36	00000014			 codeseg
+     37	00000000			 proc MainRoutine c near
+     38					 arg @@Mod,@@Nul,@@Env,@@Arg
+     39					 ; determine begin of arguments
+1    40	00000000  C8 0000 00			 ENTERD	 00000h,0
+1    41	00000004  FC			   cld ; operate foreward scan
+     42	00000005  B9 00000200		   mov ecx,512 ; max scan length
+     43	0000000A  8B 7D	14		   mov edi,[@@Arg] ; start address
+     44	0000000D  F2> AE		   repne scasb ; find terminator
+     45					 ; process passed arguments
+     46	0000000F  BB 000000AAr		   mov ebx,offset(PutFingerEvent)
+     47	00000014  B9 00000152r		   mov ecx,offset(PutStylusEvent)
+     48	00000019  BE 00000063r		   mov esi,offset(PutScreenEvent)
+     49	0000001E  E8 00000524		   call	ProcessArguments
+     50					 ; open	tablet device driver
+     51					   call	DosOpen	c,offset(szTablet),offset(fhTablet),offset(ActionTaken),0,0,1,0192h,0
+1    52	00000023  6A 00				 PUSH	 0
+1    53	00000025  68 00000192			 PUSH	 0192H
+1    54	0000002A  6A 01				 PUSH	 1
+1    55	0000002C  6A 00				 PUSH	 0
+1    56	0000002E  6A 00				 PUSH	 0
+1    57	00000030  68 00000000r			 PUSH	 OFFSET(ACTIONTAKEN)
+Turbo Assembler	 Version 4.1	    10-03-15 18:07:22	    Page 2
+intuos.asm
+
+
+
+1    58	00000035  68 0000000Cr			 PUSH	 OFFSET(FHTABLET)
+1    59	0000003A  68 0000000Er			 PUSH	 OFFSET(SZTABLET)
+1    60	0000003F  E8 00000000e			 CALL	 DOSOPEN
+1    61	00000044  83 C4	20			 ADD	 ESP,00020h
+     62	00000047  85 C0			   test	eax,eax	; success
+     63	00000049  0F 85	00000084	   jnz NotOpenTabletDriver
+     64					 ; open	screen device driver
+     65					   call	DosOpen	c,offset(szScreen),offset(fhScreen),offset(ActionTaken),0,0,1,0192h,0
+1    66	0000004F  6A 00				 PUSH	 0
+1    67	00000051  68 00000192			 PUSH	 0192H
+1    68	00000056  6A 01				 PUSH	 1
+1    69	00000058  6A 00				 PUSH	 0
+1    70	0000005A  6A 00				 PUSH	 0
+1    71	0000005C  68 00000000r			 PUSH	 OFFSET(ACTIONTAKEN)
+1    72	00000061  68 00000008r			 PUSH	 OFFSET(FHSCREEN)
+1    73	00000066  68 00000000r			 PUSH	 OFFSET(SZSCREEN)
+1    74	0000006B  E8 00000000e			 CALL	 DOSOPEN
+1    75	00000070  83 C4	20			 ADD	 ESP,00020h
+     76	00000073  85 C0			   test	eax,eax	; success
+     77	00000075  75 4E			   jnz NotOpenScreenDriver
+     78					 ; register termination	processing
+     79					   call	DosExitList c,1,offset(ProcessComplete)
+1    80	00000077  68 000000DFr			 PUSH	 OFFSET(PROCESSCOMPLETE)
+1    81	0000007C  6A 01				 PUSH	 1
+1    82	0000007E  E8 00000000e			 CALL	 DOSEXITLIST
+1    83	00000083  83 C4	08			 ADD	 ESP,00008h
+     84					 ; move	cursor to center of screen
+     85					   call	DosWrite c,[fhScreen],esi,10,offset(BytesDone)
+1    86	00000086  68 00000004r			 PUSH	 OFFSET(BYTESDONE)
+1    87	0000008B  6A 0A				 PUSH	 10
+1    88	0000008D  56				 PUSH	 ESI
+1    89	0000008E  FF 35	00000008r		 PUSH	 [FHSCREEN]
+1    90	00000094  E8 00000000e			 CALL	 DOSWRITE
+1    91	00000099  83 C4	10			 ADD	 ESP,00010h
+     92					 ; start tablet	input thread
+     93					   call	DosCreateThread	c,offset(tidTablet),offset(TabletThread),0,2,8192
+1    94	0000009C  68 00002000			 PUSH	 8192
+1    95	000000A1  6A 02				 PUSH	 2
+1    96	000000A3  6A 00				 PUSH	 0
+1    97	000000A5  68 00000119r			 PUSH	 OFFSET(TABLETTHREAD)
+1    98	000000AA  68 00000010r			 PUSH	 OFFSET(TIDTABLET)
+1    99	000000AF  E8 00000000e			 CALL	 DOSCREATETHREAD
+1   100	000000B4  83 C4	14			 ADD	 ESP,00014h
+    101					 ; hang	in here	forever
+    102					   call	DosSleep c,-1
+1   103	000000B7  6A FF				 PUSH	 -1
+1   104	000000B9  E8 00000000e			 CALL	 DOSSLEEP
+1   105	000000BE  83 C4	04			 ADD	 ESP,00004h
+    106	000000C1			 label EndProcess near
+    107					 ; force process complete
+    108	000000C1  2B C0			   sub eax,eax ; success
+1   109	000000C3  C9				 LEAVED
+1   110	000000C4  C3				 RET	 00000h
+    111	000000C5			 label NotOpenScreenDriver near
+    112					 ; close tablet	device driver
+    113					   call	DosClose c,[fhTablet]
+1   114	000000C5  FF 35	0000000Cr		 PUSH	 [FHTABLET]
+Turbo Assembler	 Version 4.1	    10-03-15 18:07:22	    Page 3
+intuos.asm
+
+
+
+1   115	000000CB  E8 00000000e			 CALL	 DOSCLOSE
+1   116	000000D0  83 C4	04			 ADD	 ESP,00004h
+    117	000000D3			 label NotOpenTabletDriver near
+    118					 ; exit	the process
+    119					   call	DosExit	c,1,0
+1   120	000000D3  6A 00				 PUSH	 0
+1   121	000000D5  6A 01				 PUSH	 1
+1   122	000000D7  E8 00000000e			 CALL	 DOSEXIT
+1   123	000000DC  83 C4	08			 ADD	 ESP,00008h
+    124	000000DF			 endp MainRoutine
+    125
+    126	000000DF			 codeseg
+    127	000000DF			 proc ProcessComplete c	near
+    128					 arg @@ReasonCode
+    129					 ; suspend tablet input	thread
+1   130	000000DF  C8 0000 00			 ENTERD	 00000h,0
+1   131					   call	DosSuspendThread c,[tidTablet]
+2   132	000000E3  FF 35	00000010r		 PUSH	 [TIDTABLET]
+2   133	000000E9  E8 00000000e			 CALL	 DOSSUSPENDTHREAD
+2   134	000000EE  83 C4	04			 ADD	 ESP,00004h
+    135					 ; close screen	device driver
+    136					   call	DosClose c,[fhScreen]
+1   137	000000F1  FF 35	00000008r		 PUSH	 [FHSCREEN]
+1   138	000000F7  E8 00000000e			 CALL	 DOSCLOSE
+1   139	000000FC  83 C4	04			 ADD	 ESP,00004h
+    140					 ; close tablet	device driver
+    141					   call	DosClose c,[fhTablet]
+1   142	000000FF  FF 35	0000000Cr		 PUSH	 [FHTABLET]
+1   143	00000105  E8 00000000e			 CALL	 DOSCLOSE
+1   144	0000010A  83 C4	04			 ADD	 ESP,00004h
+    145					 ; exit	termination process
+    146					   call	DosExitList c,3,0)
+1   147	0000010D  6A 00				 PUSH	 0
+1   148	0000010F  6A 03				 PUSH	 3
+1   149	00000111  E8 00000000e			 CALL	 DOSEXITLIST
+1   150	00000116  83 C4	08			 ADD	 ESP,00008h
+    151	00000119			 endp ProcessComplete
+    152
+    153	00000119			 dataseg
+    154	0000001C  00			 SelectTouch db	0
+    155
+    156	0000001D			 codeseg
+    157	00000119			 proc TabletThread c near
+    158					 arg @@parameter:dword
+    159					 ; set time critical priority
+1   160	00000119  C8 0000 00			 ENTERD	 00000h,0
+1   161					   call	DosSetPriority c,2,3,31,0
+2   162	0000011D  6A 00				 PUSH	 0
+2   163	0000011F  6A 1F				 PUSH	 31
+2   164	00000121  6A 03				 PUSH	 3
+2   165	00000123  6A 02				 PUSH	 2
+2   166	00000125  E8 00000000e			 CALL	 DOSSETPRIORITY
+2   167	0000012A  83 C4	10			 ADD	 ESP,00010h
+    168					 ; start stylus	input process
+    169	0000012D  80 3D	0000001Cr 01	   cmp [SelectTouch],1 ; touch
+    170	00000134  0F 85	00000334	   jne StylusProcess ; stylus
+    171	0000013A  E9 00000261		   jmp FingerProcess ; finger
+Turbo Assembler	 Version 4.1	    10-03-15 18:07:22	    Page 4
+intuos.asm
+
+
+
+    172	0000013F			 label BadTabletThread near
+    173					 ; exit	the tablet thread
+    174					   call	DosExit	c,0,0
+1   175	0000013F  6A 00				 PUSH	 0
+1   176	00000141  6A 00				 PUSH	 0
+1   177	00000143  E8 00000000e			 CALL	 DOSEXIT
+1   178	00000148  83 C4	08			 ADD	 ESP,00008h
+    179	0000014B			 endp TabletThread
+    180
+    181	0000014B			 struc tbl
+    182					 ; common tablet buffer
+    183	00000000  01*(00)		 EvntBt0 db 0 ;	event flags
+    184	00000001  01*(00)		 EvntBt1 db 0 ;	event flags
+    185	00000002  01*(00)		 EvntBt2 db 0 ;	event flags
+    186	00000003  01*(00)		 EvntBt3 db 0 ;	event flags
+    187	00000004  01*(????????)		 xMaxPos dd ? ;	tablet width
+    188	00000008  01*(????????)		 yMaxPos dd ? ;	tablet height
+    189	0000000C  01*(00000500)		 xMaxOut dd xMaxScreen ; width
+    190	00000010  01*(00000320)		 yMaxOut dd yMaxScreen ; height
+    191	00000014  01*(00000000)		 xMinOut dd 0 ;	horizontal offset
+    192	00000018  01*(00000000)		 yMinOut dd 0 ;	vertical offset
+    193	0000001C  01*(00000000)		 xNewPos dd 0 ;	new position
+    194	00000020  01*(00000000)		 yNewPos dd 0 ;	new position
+    195	00000024  01*(00000000)		 xOldPos dd 0 ;	old position
+    196	00000028  01*(00000000)		 yOldPos dd 0 ;	old position
+    197					 ; mouse events	left/right
+    198	0000002C  01*(1806)		 Button1 dw 1806h ; 010/001
+    199	0000002E  01*(0618)		 Button2 dw 0618h ; 001/010
+    200	00000030  01*(6060)		 Button3 dw 6060h ; 100/100
+    201					 ; set maximum positions
+    202	00000032  01*(????)		 xMax0 dw ? ; width
+    203	00000034  01*(????)		 yMax0 dw ? ; height
+    204	00000036  01*(????)		 xMax1 dw ? ; width
+    205	00000038  01*(????)		 yMax1 dw ? ; height
+    206	0000003A			 ends tbl
+    207
+    208	0000014B			 proc MouseActions near
+    209					 ; set mouse button event
+    210	0000014B  A8 07			   test	al,07h ; buttons
+    211	0000014D  B4 01			   mov ah,001h ; MoveOnly
+    212	0000014F  74 20			   jz EndButtons ; none
+    213	00000151  B4 00			   mov ah,000h ; NoButMov
+    214					 ; left/right handed mouse
+    215	00000153  0F B6	15 00000062r	   movzx edx,[ButtonMode]
+    216	0000015A  03 D7			   add edx,edi ; left/right
+    217					 ; check 1st physical button
+    218	0000015C  A8 01			   test	al,01h ; 1st button
+    219	0000015E  74 03			   jz EndButton1 ; nope
+    220					 ; apply 1st logical button
+    221	00000160  0A 62	2C		   or ah,[byte(edx+tbl.Button1)]
+    222	00000163			 label EndButton1 near
+    223					 ; check 2nd physical button
+    224	00000163  A8 02			   test	al,02h ; 2nd button
+    225	00000165  74 03			   jz EndButton2 ; nope
+    226					 ; apply 2nd logical button
+    227	00000167  0A 62	2E		   or ah,[byte(edx+tbl.Button2)]
+    228	0000016A			 label EndButton2 near
+Turbo Assembler	 Version 4.1	    10-03-15 18:07:22	    Page 5
+intuos.asm
+
+
+
+    229					 ; check 3rd physical button
+    230	0000016A  A8 04			   test	al,04h ; 3rd button
+    231	0000016C  74 03			   jz EndButton3 ; nope
+    232					 ; apply 3rd logical button
+    233	0000016E  0A 62	30		   or ah,[byte(edx+tbl.Button3)]
+    234	00000171			 label EndButton3 near
+    235	00000171			 label EndButtons near
+    236					 ; return to caller
+    237	00000171  C3			   ret ; return
+    238	00000172			 endp MouseActions
+    239
+    240	00000172			 struc scr
+    241					 ; common event	buffer
+    242	00000000  01*(0001)		 BtnEvnt dw 1 ;	move to	center
+    243	00000002  01*(0190)		 yCurPos dw yMaxScreen/2 ; center
+    244	00000004  01*(0280)		 xCurPos dw xMaxScreen/2 ; center
+    245	00000006  01*(0320)		 yMaxPos dw yMaxScreen ; height
+    246	00000008  01*(0500)		 xMaxPos dw xMaxScreen ; width
+    247	0000000A  01*(00000500)		 xMaxOut dd xMaxScreen ; width
+    248	0000000E  01*(00000320)		 yMaxOut dd yMaxScreen ; height
+    249	00000012  01*(00000280)		 xOutPos dd xMaxScreen/2 ; center
+    250	00000016  01*(00000190)		 yOutPos dd yMaxScreen/2 ; center
+    251					 ; set mouse events left/right
+    252	0000001A  01*(0101)		 Action0 dw 0101h ; 000/000
+    253	0000001C  01*(1806)		 Action1 dw 1806h ; 010/001
+    254	0000001E  01*(0618)		 Action2 dw 0618h ; 001/010
+    255	00000020  01*(1E1E)		 Action3 dw 1E1Eh ; 011/011
+    256	00000022  01*(6060)		 Action4 dw 6060h ; 100/100
+    257	00000024  01*(7866)		 Action5 dw 7866h ; 101/011
+    258	00000026  01*(6678)		 Action6 dw 6678h ; 011/101
+    259	00000028  01*(7E7E)		 Action7 dw 7E7Eh ; 111/111
+    260	0000002A			 ends scr
+    261
+    262	00000172			 dataseg
+    263	0000001D  00			 CircleMode db 0
+    264
+    265	0000001E			 codeseg
+    266	00000172			 proc ProperAspect near
+    267					 ; prepare proper active area
+    268	00000172  83 E0	0F		   and eax,0Fh ; limit index
+    269	00000175  0F B7	54 87 32	   movzx edx,[word(edi+eax*4+tbl.xMax0)]
+    270	0000017A  89 57	04		   mov [edi+tbl.xMaxPos],edx
+    271	0000017D  0F B7	54 87 34	   movzx edx,[word(edi+eax*4+tbl.yMax0)]
+    272	00000182  89 57	08		   mov [edi+tbl.yMaxPos],edx
+    273					 ; verify proper aspect	ratio
+    274	00000185  80 3D	0000001Dr 01	   cmp [CircleMode],1 ;	circles
+    275	0000018C  BE 00000063r		   mov esi,offset(PutScreenEvent)
+    276	00000191  75 38			   jne EndProperAspect ; nope
+    277					 ; fit screen x	into tablet
+    278	00000193  8B 46	0E		   mov eax,[esi+scr.yMaxOut]
+    279	00000196  F7 67	04		   mul [edi+tbl.xMaxPos]
+    280	00000199  F7 77	08		   div [edi+tbl.yMaxPos]
+    281	0000019C  3B 46	0A		   cmp eax,[esi+scr.xMaxOut]
+    282	0000019F  73 03			   jnb EndxMaxTablet ; fit
+    283	000001A1  8B 46	0A		   mov eax,[esi+scr.xMaxOut]
+    284	000001A4			 label EndxMaxTablet near
+    285	000001A4  89 47	0C		   mov [edi+tbl.xMaxOut],eax
+Turbo Assembler	 Version 4.1	    10-03-15 18:07:22	    Page 6
+intuos.asm
+
+
+
+    286	000001A7  2B 46	0A		   sub eax,[esi+scr.xMaxOut]
+    287	000001AA  D1 E8			   shr eax,1 ; offset position
+    288	000001AC  89 47	14		   mov [edi+tbl.xMinOut],eax
+    289					 ; fit screen y	into tablet
+    290	000001AF  8B 46	0A		   mov eax,[esi+scr.xMaxOut]
+    291	000001B2  F7 67	08		   mul [edi+tbl.yMaxPos]
+    292	000001B5  F7 77	04		   div [edi+tbl.xMaxPos]
+    293	000001B8  3B 46	0E		   cmp eax,[esi+scr.yMaxOut]
+    294	000001BB  73 03			   jnb EndyMaxTablet ; fit
+    295	000001BD  8B 46	0E		   mov eax,[esi+scr.yMaxOut]
+    296	000001C0			 label EndyMaxTablet near
+    297	000001C0  89 47	10		   mov [edi+tbl.yMaxOut],eax
+    298	000001C3  2B 46	0E		   sub eax,[esi+scr.yMaxOut]
+    299	000001C6  D1 E8			   shr eax,1 ; offset position
+    300	000001C8  89 47	18		   mov [edi+tbl.yMinOut],eax
+    301	000001CB			 label EndProperAspect near
+    302					 ; return to caller
+    303	000001CB  C3			   ret ; return
+    304	000001CC			 endp ProperAspect
+    305
+    306		  =0008			 nMax=8	; entries
+    307
+    308	000001CC			 struc flt
+    309					 ; rolling average
+    310	00000000  01*(????????)		 FltN dd ? ; filter
+    311	00000004  01*(????????)		 UseN dd ? ; entries
+    312	00000008  01*(00000000)		 PosN dd 0 ; index
+    313	0000000C  01*(00000000)		 SumX dd 0 ; rolling
+    314	00000010  01*(00000000)		 SumY dd 0 ; rolling
+    315	00000014  01*(00000000)		 TotX dd 0 ; output
+    316	00000018  01*(00000000)		 TotY dd 0 ; output
+    317	0000001C  01*(08*(00000000))	 ValX dd nMax dup(0)
+    318	0000003C  01*(08*(00000000))	 ValY dd nMax dup(0)
+    319	0000005C			 ends flt
+    320
+    321	000001CC			 codeseg
+    322	000001CC			 proc RollingAverage near
+    323					 ; check reset average
+    324	000001CC  3C 00			   cmp al,0 ; reset
+    325	000001CE  75 23			   jne EndResetAverage
+    326					 ; reset rolling average
+    327	000001D0  2B C0			   sub eax,eax ; zeroes
+    328	000001D2  89 47	0C		   mov [edi+flt.SumX],eax
+    329	000001D5  89 47	10		   mov [edi+flt.SumY],eax
+    330	000001D8  0F B7	5E 0A		   movzx ebx,[word(esi+10)]
+    331	000001DC  0F B7	56 0C		   movzx edx,[word(esi+12)]
+    332	000001E0  8B 4F	04		   mov ecx,[edi+flt.UseN]
+    333	000001E3			 label ResetAverage near
+    334	000001E3  89 5C	8F 18		   mov [edi-4+ecx*4+flt.ValX],ebx
+    335	000001E7  89 54	8F 38		   mov [edi-4+ecx*4+flt.ValY],edx
+    336	000001EB  01 5F	0C		   add [edi+flt.SumX],ebx
+    337	000001EE  01 57	10		   add [edi+flt.SumY],edx
+    338	000001F1  E2 F0			   loop	ResetAverage
+    339	000001F3			 label EndResetAverage near
+    340					 ; update rolling position
+    341	000001F3  8B 4F	08		   mov ecx,[edi+flt.PosN]
+    342	000001F6  49			   dec ecx ; next position
+Turbo Assembler	 Version 4.1	    10-03-15 18:07:22	    Page 7
+intuos.asm
+
+
+
+    343	000001F7  79 03			   jns EndFilterIndex ;	ok
+    344	000001F9  03 4F	04		   add ecx,[edi+flt.UseN]
+    345	000001FC			 label EndFilterIndex near
+    346	000001FC  89 4F	08		   mov [edi+flt.PosN],ecx
+    347					 ; build current x position
+    348	000001FF  0F B7	46 0A		   movzx eax,[word(esi+10)]
+    349					 ; update rolling x amount
+    350	00000203  8B 5C	8F 1C		   mov ebx,[edi+ecx*4+flt.ValX]
+    351	00000207  89 44	8F 1C		   mov [edi+ecx*4+flt.ValX],eax
+    352	0000020B  03 47	0C		   add eax,[edi+flt.SumX]
+    353	0000020E  2B C3			   sub eax,ebx ; old sample
+    354	00000210  89 47	0C		   mov [edi+flt.SumX],eax
+    355					 ; apply stylus	x filter
+    356	00000213  8B 5F	14		   mov ebx,[edi+flt.TotX]
+    357	00000216  2B D8			   sub ebx,eax ; deviation
+    358	00000218  79 02			   jns xRolPositive ; ok
+    359	0000021A  F7 DB			   neg ebx ; make positive
+    360	0000021C			 label xRolPositive near
+    361	0000021C  3B 1F			   cmp ebx,[edi+flt.FltN]
+    362	0000021E  73 03			   jnb EndRolSmoothX ; new
+    363	00000220  8B 47	14		   mov eax,[edi+flt.TotX]
+    364	00000223			 label EndRolSmoothX near
+    365	00000223  89 47	14		   mov [edi+flt.TotX],eax
+    366					 ; new rolling x average
+    367	00000226  2B D2			   sub edx,edx ; zeroes
+    368	00000228  F7 77	04		   div [edi+flt.UseN]
+    369					 ; store new x position
+    370	0000022B  66| 89 46 0A		   mov [word(esi+10)],ax
+    371					 ; build current y position
+    372	0000022F  0F B7	46 0C		   movzx eax,[word(esi+12)]
+    373					 ; update rolling y amount
+    374	00000233  8B 5C	8F 3C		   mov ebx,[edi+ecx*4+flt.ValY]
+    375	00000237  89 44	8F 3C		   mov [edi+ecx*4+flt.ValY],eax
+    376	0000023B  03 47	10		   add eax,[edi+flt.SumY]
+    377	0000023E  2B C3			   sub eax,ebx ; old sample
+    378	00000240  89 47	10		   mov [edi+flt.SumY],eax
+    379					 ; apply stylus	y filter
+    380	00000243  8B 5F	18		   mov ebx,[edi+flt.TotY]
+    381	00000246  2B D8			   sub ebx,eax ; deviation
+    382	00000248  79 02			   jns yRolPositive ; ok
+    383	0000024A  F7 DB			   neg ebx ; make positive
+    384	0000024C			 label yRolPositive near
+    385	0000024C  3B 1F			   cmp ebx,[edi+flt.FltN]
+    386	0000024E  73 03			   jnb EndRolSmoothY ; new
+    387	00000250  8B 47	18		   mov eax,[edi+flt.TotY]
+    388	00000253			 label EndRolSmoothY near
+    389	00000253  89 47	18		   mov [edi+flt.TotY],eax
+    390					 ; new rolling y average
+    391	00000256  2B D2			   sub edx,edx ; zeroes
+    392	00000258  F7 77	04		   div [edi+flt.UseN]
+    393					 ; store new y position
+    394	0000025B  66| 89 46 0C		   mov [word(esi+12)],ax
+    395					 ; return to caller
+    396	0000025F  C3			   ret ; return
+    397	00000260			 endp RollingAverage
+    398
+    399	00000260			 dataseg
+Turbo Assembler	 Version 4.1	    10-03-15 18:07:22	    Page 8
+intuos.asm
+
+
+
+    400	0000001E  80 06	00 01 00 00 12+	 GetDevDescriptor db 80h,06h,00h,01h,00h,00h,12h,00h,12h dup(0EEh)
+    401		  00 12*(EE)
+    402
+    403	00000038			 codeseg
+    404	00000260			 proc ControlTransfer near
+    405					 ; execute control transfer
+    406	00000260  88 47	06		   mov [edi+6],al ; data size
+    407	00000263  8D 50	08		   lea edx,[eax+8] ; total size
+    408					   call	DosWrite c,[fhTablet],edi,edx,offset(BytesDone)
+1   409	00000266  68 00000004r			 PUSH	 OFFSET(BYTESDONE)
+1   410	0000026B  52				 PUSH	 EDX
+1   411	0000026C  57				 PUSH	 EDI
+1   412	0000026D  FF 35	0000000Cr		 PUSH	 [FHTABLET]
+1   413	00000273  E8 00000000e			 CALL	 DOSWRITE
+1   414	00000278  83 C4	10			 ADD	 ESP,00010h
+    415	0000027B  85 C0			   test	eax,eax	; success
+    416					 ; return to caller
+    417	0000027D  C3			   ret ; return
+    418	0000027E			 endp ControlTransfer
+    419
+    420	0000027E			 dataseg
+    421	00000038  00 09	01 00 00 00 00+	 SetConfiguration db 00h,09h,01h,00h,00h,00h,00h,00h
+    422		  00
+    423	00000040  21 09	02 03 00 00 02+	 SetFeatureReport db 21h,09h,02h,03h,00h,00h,02h,00h,02h,02h
+    424		  00 02	02
+    425
+    426	0000004A			 dataseg
+    427					 ; idProduct<00><01><02><03><04><05><06><07><08><09><0A><0B><0C><0D><0E><0F>
+    428	0000004A  00 00	20 21 00 00 00+	 TypeSize db 00h,00h,20h,21h,00h,00h,00h,00h,00h,00h,00h,00h,00h,00h,20h,00h
+    429		  00 00	00 00 00 00 00+
+    430		  20 00
+    431
+    432	0000005A			 codeseg
+    433	0000027E			 proc SwitchTablet near
+    434					 ; hang	in here	some minimum time
+    435					   call	DosSleep c,50 ;	milliseconds
+1   436	0000027E  6A 32				 PUSH	 50
+1   437	00000280  E8 00000000e			 CALL	 DOSSLEEP
+1   438	00000285  83 C4	04			 ADD	 ESP,00004h
+    439					 ; get device descriptor request
+    440	00000288  BF 0000001Er		   mov edi,offset(GetDevDescriptor)
+    441	0000028D  B8 00000012		   mov eax,12h ; data length
+    442	00000292  E8 FFFFFFC9		   call	ControlTransfer
+    443	00000297  75 E5			   jnz SwitchTablet
+    444					 ; set configuration request
+    445	00000299  BF 00000038r		   mov edi,offset(SetConfiguration)
+    446	0000029E  E8 FFFFFFBD		   call	ControlTransfer
+    447	000002A3  75 D9			   jnz SwitchTablet
+    448					 ; set feature report request
+    449	000002A5  BF 00000040r		   mov edi,offset(SetFeatureReport)
+    450	000002AA  B0 02			   mov al,02h ;	data length
+    451	000002AC  E8 FFFFFFAF		   call	ControlTransfer
+    452	000002B1  75 CB			   jnz SwitchTablet
+    453					 ; hang	in here	some minimum time
+    454					   call	DosSleep c,50 ;	milliseconds
+1   455	000002B3  6A 32				 PUSH	 50
+1   456	000002B5  E8 00000000e			 CALL	 DOSSLEEP
+Turbo Assembler	 Version 4.1	    10-03-15 18:07:22	    Page 9
+intuos.asm
+
+
+
+1   457	000002BA  83 C4	04			 ADD	 ESP,00004h
+    458					 ; setup tablet	capabilities
+    459	000002BD  A0 00000030r		   mov al,[GetDevDescriptor+18]
+    460	000002C2  83 E0	0F		   and eax,0Fh ; limit index
+    461	000002C5  8A 80	0000004Ar	   mov al,[TypeSize+eax]
+    462					 ; return to caller
+    463	000002CB  C3			   ret ; return
+    464	000002CC			 endp SwitchTablet
+    465
+    466	000002CC			 codeseg
+    467	000002CC			 proc TabletToScreen c near
+    468					 arg @@xCurPos,@@yCurPos
+    469					 ; save	tablet position
+1   470	000002CC  C8 0000 00			 ENTERD	 00000h,0
+1   471	000002D0  8B 47	1C		   mov eax,[edi+tbl.xNewPos]
+    472	000002D3  89 47	24		   mov [edi+tbl.xOldPos],eax
+    473	000002D6  8B 47	20		   mov eax,[edi+tbl.yNewPos]
+    474	000002D9  89 47	28		   mov [edi+tbl.yOldPos],eax
+    475					 ; convert current xpos
+    476	000002DC  8B 45	08		   mov eax,[@@xCurPos]
+    477	000002DF  F7 67	0C		   mul [edi+tbl.xMaxOut]
+    478	000002E2  F7 77	04		   div [edi+tbl.xMaxPos]
+    479	000002E5  2B 47	14		   sub eax,[edi+tbl.xMinOut]
+    480	000002E8  79 02			   jns xPosNewPosition ; ok
+    481	000002EA  2B C0			   sub eax,eax ; minimum
+    482	000002EC			 label xPosNewPosition near
+    483	000002EC  89 47	1C		   mov [edi+tbl.xNewPos],eax
+    484					 ; convert current ypos
+    485	000002EF  8B 45	0C		   mov eax,[@@yCurPos]
+    486	000002F2  F7 67	10		   mul [edi+tbl.yMaxOut]
+    487	000002F5  F7 77	08		   div [edi+tbl.yMaxPos]
+    488	000002F8  2B 47	18		   sub eax,[edi+tbl.yMinOut]
+    489	000002FB  79 02			   jns yPosNewPosition ; ok
+    490	000002FD  2B C0			   sub eax,eax ; minimum
+    491	000002FF			 label yPosNewPosition near
+    492	000002FF  89 47	20		   mov [edi+tbl.yNewPos],eax
+    493					 ; verify screen position
+    494	00000302  80 7F	02 01		   cmp [edi+tbl.EvntBt2],1
+    495	00000306  74 10			   je UsePosition ; use
+    496	00000308  C6 47	02 01		   mov [edi+tbl.EvntBt2],1
+    497					 ; save	tablet position
+    498	0000030C  8B 47	1C		   mov eax,[edi+tbl.xNewPos]
+    499	0000030F  89 47	24		   mov [edi+tbl.xOldPos],eax
+    500	00000312  8B 47	20		   mov eax,[edi+tbl.yNewPos]
+    501	00000315  89 47	28		   mov [edi+tbl.yOldPos],eax
+    502	00000318			 label UsePosition near
+    503					 ; return to caller
+1   504	00000318  C9				 LEAVED
+1   505	00000319  C3				 RET	 00000h
+    506	0000031A			 endp TabletToScreen
+    507
+    508	0000031A			 dataseg
+    509	0000005A  00000001		 FingerMode dd 1 ; relative
+    510	0000005E  00000000		 StylusMode dd 0 ; absolute
+    511
+    512	00000062			 dataseg
+    513	00000062  00			 ButtonMode db 0 ; right
+Turbo Assembler	 Version 4.1	    10-03-15 18:07:22	    Page 10
+intuos.asm
+
+
+
+    514
+    515	00000063			 dataseg
+    516	00000063  0001 0190 0280 0320 +	 PutScreenEvent	scr {}
+    517		  0500 00000500	      +
+    518		  00000320 00000280   +
+    519		  00000190 0101	1806  +
+    520		  0618 1E1E 6060 7866 +
+    521		  6678 7E7E
+    522
+    523	0000008D			 dataseg
+    524	0000008D  00			 TabletRotate db 0 ; no
+    525
+    526	0000008E			 codeseg
+    527	0000031A			 proc WriteScreen c near
+    528					 arg @@MouseMode
+    529					 local @@BytesDone
+    530					 ; prepare screen work pointer
+1   531	0000031A  C8 0004 00			 ENTERD	 00004h,0
+1   532	0000031E  BA 00000063r		   mov edx,offset(PutScreenEvent)
+    533					 ; provide current event
+    534	00000323  8A 07			   mov al,[edi+tbl.EvntBt0]
+    535	00000325  88 02			   mov [edx],al	; event
+    536					 ; update screen position
+    537	00000327  80 7F	02 01		   cmp [edi+tbl.EvntBt2],1
+    538	0000032B  75 5C			   jne WriteEvent ; skip
+    539					 ; obtain tablet position
+    540	0000032D  8B 5F	1C		   mov ebx,[edi+tbl.xNewPos]
+    541	00000330  8B 4F	20		   mov ecx,[edi+tbl.yNewPos]
+    542					 ; check relative mode
+    543	00000333  8B 45	08		   mov eax,[@@MouseMode]
+    544	00000336  3C 01			   cmp al,1 ; relative
+    545	00000338  75 14			   jne EndMouseMode ; no
+    546					 ; update relative position
+    547	0000033A  2B 5F	24		   sub ebx,[edi+tbl.xOldPos]
+    548	0000033D  2B 4F	28		   sub ecx,[edi+tbl.yOldPos]
+    549					 ; update absolute xpos
+    550	00000340  03 5A	12		   add ebx,[edx+scr.xOutPos]
+    551					 ; verify minimum xpos
+    552	00000343  79 02			   jns xPosPositive
+    553	00000345  2B DB			   sub ebx,ebx ; minimum
+    554	00000347			 label xPosPositive near
+    555					 ; update absolute ypos
+    556	00000347  03 4A	16		   add ecx,[edx+scr.yOutPos]
+    557					 ; verify minimum ypos
+    558	0000034A  79 02			   jns yPosPositive
+    559	0000034C  2B C9			   sub ecx,ecx ; minimum
+    560	0000034E			 label yPosPositive near
+    561	0000034E			 label EndMouseMode near
+    562					 ; verify maximum xpos
+    563	0000034E  3B 5A	0A		   cmp ebx,[edx+scr.xMaxOut]
+    564	00000351  76 03			   jna xPosAccepted
+    565	00000353  8B 5A	0A		   mov ebx,[edx+scr.xMaxOut]
+    566	00000356			 label xPosAccepted near
+    567					 ; verify maximum ypos
+    568	00000356  3B 4A	0E		   cmp ecx,[edx+scr.yMaxOut]
+    569	00000359  76 03			   jna yPosAccepted
+    570	0000035B  8B 4A	0E		   mov ecx,[edx+scr.yMaxOut]
+Turbo Assembler	 Version 4.1	    10-03-15 18:07:22	    Page 11
+intuos.asm
+
+
+
+    571	0000035E			 label yPosAccepted near
+    572					 ; supply screen position
+    573	0000035E  89 5A	12		   mov [edx+scr.xOutPos],ebx
+    574	00000361  89 4A	16		   mov [edx+scr.yOutPos],ecx
+    575					 ; rotate tablet position
+    576	00000364  80 3D	0000008Dr 01	   cmp [TabletRotate],1
+    577	0000036B  75 14			   jne NotRotate ; no
+    578					 ; reverse tablet xpos
+    579	0000036D  8B 42	0A		   mov eax,[edx+scr.xMaxOut]
+    580	00000370  2B C3			   sub eax,ebx ; downwards
+    581	00000372  66| 89 42 04		   mov [edx+scr.xCurPos],ax
+    582					 ; reverse tablet ypos
+    583	00000376  8B 42	0E		   mov eax,[edx+scr.yMaxOut]
+    584	00000379  2B C1			   sub eax,ecx ; downwards
+    585	0000037B  66| 89 42 02		   mov [edx+scr.yCurPos],ax
+    586	0000037F  EB 08			   jmp EndRotate ; done
+    587	00000381			 label NotRotate near
+    588	00000381  66| 89 5A 04		   mov [edx+scr.xCurPos],bx
+    589	00000385  66| 89 4A 02		   mov [edx+scr.yCurPos],cx
+    590	00000389			 label EndRotate near
+    591	00000389			 label WriteEvent near
+    592					 ; write screen	event
+    593	00000389  8D 45	FC		   lea eax,[@@BytesDone]
+    594					   call	DosWrite c,[fhScreen],edx,10,eax
+1   595	0000038C  50				 PUSH	 EAX
+1   596	0000038D  6A 0A				 PUSH	 10
+1   597	0000038F  52				 PUSH	 EDX
+1   598	00000390  FF 35	00000008r		 PUSH	 [FHSCREEN]
+1   599	00000396  E8 00000000e			 CALL	 DOSWRITE
+1   600	0000039B  83 C4	10			 ADD	 ESP,00010h
+    601					 ; return to caller
+1   602	0000039E  C9				 LEAVED
+1   603	0000039F  C3				 RET	 00000h
+    604	000003A0			 endp WriteScreen
+    605
+    606	000003A0			 dataseg
+    607	0000008E  EC 00	FF FF 83 03 14+	 GetFingerInput	db 0ECh,00h,0FFh,0FFh,83h,03h,14h,00h,14h dup(0EEh)
+    608		  00 14*(EE)
+    609
+    610	000000AA			 dataseg
+    611	000000AA  00 00	00 00 08*(??) +	 PutFingerEvent	tbl {xMax0=480,yMax0=320,xMax1=720,yMax1=480}
+    612		  00000500 00000320   +
+    613		  00000000 00000000   +
+    614		  00000000 00000000   +
+    615		  00000000 00000000   +
+    616		  1806 0618 6060 01E0 +
+    617		  0140 02D0 01E0
+    618
+    619	000000E4			 udataseg
+    620	00000014  ????????		 FingerDone dd ?
+    621
+    622	00000018			 dataseg
+    623	000000E4  00000008 00000008   +	 Finger	flt {FltN=1*nMax,UseN=nMax}
+    624		  00000000 00000000   +
+    625		  00000000 00000000   +
+    626		  00000000 08*	      +
+    627		  (00000000) 08*      +
+Turbo Assembler	 Version 4.1	    10-03-15 18:07:22	    Page 12
+intuos.asm
+
+
+
+    628		  (00000000)
+    629
+    630	00000140			 codeseg
+    631	000003A0			 proc FingerProcess near
+    632					 ; setup finger	configuration
+    633	000003A0  E8 FFFFFED9		   call	SwitchTablet ; prepare
+    634					 ; verify finger capabilities
+    635	000003A5  A8 10			   test	al,10h ; finger	support
+    636	000003A7  0F 84	000000CE	   jz UseStylusEvent ; switch
+    637	000003AD			 label UseFingerEvent near
+    638					 ; apply proper	aspect ratio
+    639	000003AD  BF 000000AAr		   mov edi,offset(PutFingerEvent)
+    640	000003B2  E8 FFFFFDBB		   call	ProperAspect ; finger
+    641	000003B7  BE 0000008Er		   mov esi,offset(GetFingerInput)
+    642					 ; reset finger	position
+    643	000003BC  C6 47	02 00		   mov [edi+tbl.EvntBt2],0
+    644	000003C0			 label GetFingerEvent near
+    645	000003C0  C6 46	06 14		   mov [byte(esi+6)],14h ; reset
+    646					   call	DosWrite c,[fhTablet],esi,28,offset(FingerDone)
+1   647	000003C4  68 00000014r			 PUSH	 OFFSET(FINGERDONE)
+1   648	000003C9  6A 1C				 PUSH	 28
+1   649	000003CB  56				 PUSH	 ESI
+1   650	000003CC  FF 35	0000000Cr		 PUSH	 [FHTABLET]
+1   651	000003D2  E8 00000000e			 CALL	 DOSWRITE
+1   652	000003D7  83 C4	10			 ADD	 ESP,00010h
+    653	000003DA  85 C0			   test	eax,eax	; success
+    654	000003DC  75 C2			   jnz FingerProcess
+    655					 ; verify finger event
+    656	000003DE  80 7E	08 02		   cmp [byte(esi+8)],02h
+    657	000003E2  75 DC			   jne GetFingerEvent
+    658					 ; check tablet	rotated
+    659	000003E4  8A 46	09		   mov al,[esi+9] ; event
+    660	000003E7  80 3D	0000008Dr 01	   cmp [TabletRotate],1
+    661	000003EE  75 0C			   jne EndRotation ; ok
+    662					 ; rotate express keys
+    663	000003F0  2B C9			   sub ecx,ecx ; loop
+    664	000003F2  B1 04			   mov cl,04h ;	counter
+    665	000003F4			 label KeyRotate near
+    666	000003F4  D0 D8			   rcr al,1 ; one bit
+    667	000003F6  D0 D4			   rcl ah,1 ; one bit
+    668	000003F8  E2 FA			   loop	KeyRotate
+    669	000003FA  8A C4			   mov al,ah ; event
+    670	000003FC			 label EndRotation near
+    671					 ; process finger event
+    672	000003FC  B4 01			   mov ah,001h ; MoveOnly
+    673	000003FE  80 7E	19 11		   cmp [byte(esi+25)],011h
+    674	00000402  74 06			   je EndPosition ; single
+    675	00000404			 label NotPosition near
+    676					 ; reset finger	position
+    677	00000404  C6 47	02 00		   mov [edi+tbl.EvntBt2],0
+    678	00000408  B4 00			   mov ah,000h ; NoButMov
+    679	0000040A			 label EndPosition near
+    680	0000040A  3C 00			   cmp al,000h ; NoButMov
+    681	0000040C  74 0B			   je FingerToMouseEvent
+    682					 ; obtain mouse	actions
+    683	0000040E  E8 FFFFFD38		   call	MouseActions
+    684					 ; process finger events
+Turbo Assembler	 Version 4.1	    10-03-15 18:07:22	    Page 13
+intuos.asm
+
+
+
+    685	00000413  3C 08			   cmp al,008h ; Bt0008Down
+    686	00000415  72 02			   jb FingerToMouseEvent
+    687					 ;------------------------------------------------------------------------------
+    688					 ; action switch to stylus
+    689					 ; cmp al,00Ah ; Bt0208Down
+    690					 ; je StylusProcess
+    691					 ;------------------------------------------------------------------------------
+    692					 ; ignore unused buttons
+    693	00000417  EB A7			   jmp GetFingerEvent
+    694	00000419			 label FingerToMouseEvent near
+    695					 ; store emulated mouse	event
+    696	00000419  88 27			   mov [edi+tbl.EvntBt0],ah
+    697					 ; current finger position
+    698	0000041B  0F B6	46 0C		   movzx eax,[byte(esi+12)]
+    699	0000041F  32 66	0B		   xor ah,[byte(esi+11)]
+    700	00000422  79 37			   jns WriteFingerEvent
+    701	00000424  80 E4	01		   and ah,01h ;	validate xpos
+    702	00000427  0F B6	56 0E		   movzx edx,[byte(esi+14)]
+    703	0000042B  8A 76	0D		   mov dh,[byte(esi+13)]
+    704	0000042E  80 E6	01		   and dh,01h ;	validate ypos
+    705					 ; fix current finger position
+    706	00000431  89 46	0A		   mov [esi+10],eax ; xpos
+    707	00000434  89 56	0C		   mov [esi+12],edx ; ypos
+    708					 ; apply rolling average
+    709	00000437  8A 47	02		   mov al,[edi+tbl.EvntBt2]
+    710	0000043A  BF 000000E4r		   mov edi,offset(Finger)
+    711	0000043F  E8 FFFFFD88		   call	RollingAverage
+    712					 ; finger to screen position
+    713	00000444  BF 000000AAr		   mov edi,offset(PutFingerEvent)
+    714	00000449  0F B7	46 0A		   movzx eax,[word(esi+10)] ; xpos
+    715	0000044D  0F B7	56 0C		   movzx edx,[word(esi+12)] ; ypos
+    716					   call	TabletToScreen c,eax,edx
+1   717	00000451  52				 PUSH	 EDX
+1   718	00000452  50				 PUSH	 EAX
+1   719	00000453  E8 FFFFFE74			 CALL	 TABLETTOSCREEN
+1   720	00000458  83 C4	08			 ADD	 ESP,00008h
+    721	0000045B			 label WriteFingerEvent	near
+    722					 ; write emulated mouse	event
+    723					   call	WriteScreen c,[FingerMode]
+1   724	0000045B  FF 35	0000005Ar		 PUSH	 [FINGERMODE]
+1   725	00000461  E8 FFFFFEB4			 CALL	 WRITESCREEN
+1   726	00000466  83 C4	04			 ADD	 ESP,00004h
+    727	00000469  E9 FFFFFF52		   jmp GetFingerEvent
+    728	0000046E			 endp FingerProcess
+    729
+    730	0000046E			 dataseg
+    731	00000140  EC 00	FF FF 81 03 0A+	 GetStylusInput	db 0ECh,00h,0FFh,0FFh,81h,03h,0Ah,00h,0Ah dup(0EEh)
+    732		  00 0A*(EE)
+    733
+    734	00000152			 dataseg
+    735	00000152  00 00	00 00 08*(??) +	 PutStylusEvent	tbl {xMax0=15200,yMax0=9500,xMax1=21600,yMax1=13500}
+    736		  00000500 00000320   +
+    737		  00000000 00000000   +
+    738		  00000000 00000000   +
+    739		  00000000 00000000   +
+    740		  1806 0618 6060 3B60 +
+    741		  251C 5460 34BC
+Turbo Assembler	 Version 4.1	    10-03-15 18:07:22	    Page 14
+intuos.asm
+
+
+
+    742
+    743	0000018C			 udataseg
+    744	00000018  ????????		 StylusDone dd ?
+    745
+    746	0000001C			 dataseg
+    747	0000018C  00000040 00000008   +	 Stylus	flt {FltN=8*nMax,UseN=nMax}
+    748		  00000000 00000000   +
+    749		  00000000 00000000   +
+    750		  00000000 08*	      +
+    751		  (00000000) 08*      +
+    752		  (00000000)
+    753
+    754	000001E8			 codeseg
+    755	0000046E			 proc StylusProcess near
+    756					 ; setup stylus	configuration
+    757	0000046E  E8 FFFFFE0B		   call	SwitchTablet ; prepare
+    758					 ; verify stylus capabilities
+    759	00000473  A8 20			   test	al,20h ; stylus	support
+    760	00000475  0F 84	FFFFFF32	   jz UseFingerEvent ; switch
+    761	0000047B			 label UseStylusEvent near
+    762					 ; apply proper	aspect ratio
+    763	0000047B  BF 00000152r		   mov edi,offset(PutStylusEvent)
+    764	00000480  E8 FFFFFCED		   call	ProperAspect ; stylus
+    765	00000485  BE 00000140r		   mov esi,offset(GetStylusInput)
+    766					 ; reset stylus	position
+    767	0000048A  C6 47	02 00		   mov [edi+tbl.EvntBt2],0
+    768	0000048E			 label GetStylusEvent near
+    769	0000048E  C6 46	06 0A		   mov [byte(esi+6)],0Ah ; reset
+    770					   call	DosWrite c,[fhTablet],esi,18,offset(StylusDone)
+1   771	00000492  68 00000018r			 PUSH	 OFFSET(STYLUSDONE)
+1   772	00000497  6A 12				 PUSH	 18
+1   773	00000499  56				 PUSH	 ESI
+1   774	0000049A  FF 35	0000000Cr		 PUSH	 [FHTABLET]
+1   775	000004A0  E8 00000000e			 CALL	 DOSWRITE
+1   776	000004A5  83 C4	10			 ADD	 ESP,00010h
+    777	000004A8  85 C0			   test	eax,eax	; success
+    778	000004AA  75 C2			   jnz StylusProcess
+    779					 ; verify stylus event
+    780	000004AC  80 7E	08 02		   cmp [byte(esi+8)],02h
+    781	000004B0  75 DC			   jne GetStylusEvent
+    782					 ; process stylus event
+    783	000004B2  8A 46	09		   mov al,[esi+9] ; event
+    784					 ; accept border events
+    785	000004B5  24 EF			   and al,0EFh ; +border
+    786					 ; reset stylus	events
+    787	000004B7  3C E0			   cmp al,0E0h ; Et0000Down
+    788	000004B9  72 0B			   jb ResetStylusEvent
+    789					 ; obtain mouse	actions
+    790	000004BB  E8 FFFFFC8B		   call	MouseActions
+    791					 ; process stylus events
+    792	000004C0  3C E8			   cmp al,0E8h ; Et0008Down
+    793	000004C2  72 10			   jb StylusToMouseEvent
+    794					 ;------------------------------------------------------------------------------
+    795					 ; action switch to finger
+    796					 ; cmp al,0E9h ; Et1008Down
+    797					 ; cmp al,0EBh ; Et1208Down
+    798					 ; cmp al,0EDh ; Et1048Down
+Turbo Assembler	 Version 4.1	    10-03-15 18:07:22	    Page 15
+intuos.asm
+
+
+
+    799					 ; je FingerProcess
+    800					 ;------------------------------------------------------------------------------
+    801					 ; ignore unused buttons
+    802	000004C4  EB C8			   jmp GetStylusEvent
+    803	000004C6			 label ResetStylusEvent	near
+    804					 ; reset stylus	position
+    805	000004C6  C6 47	02 00		   mov [edi+tbl.EvntBt2],0
+    806					 ; ensure buttons released
+    807	000004CA  B4 00			   mov ah,000h ; NoButMov
+    808	000004CC  38 27			   cmp [edi+tbl.EvntBt0],ah
+    809	000004CE  74 BE			   je GetStylusEvent ; ok
+    810	000004D0  88 27			   mov [edi+tbl.EvntBt0],ah
+    811	000004D2  EB 26			   jmp WriteStylusEvent
+    812	000004D4			 label StylusToMouseEvent near
+    813					 ; store emulated mouse	event
+    814	000004D4  88 27			   mov [edi+tbl.EvntBt0],ah
+    815					 ; apply rolling average
+    816	000004D6  8A 47	02		   mov al,[edi+tbl.EvntBt2]
+    817	000004D9  BF 0000018Cr		   mov edi,offset(Stylus)
+    818	000004DE  E8 FFFFFCE9		   call	RollingAverage
+    819					 ; stylus to screen position
+    820	000004E3  BF 00000152r		   mov edi,offset(PutStylusEvent)
+    821	000004E8  0F B7	46 0A		   movzx eax,[word(esi+10)] ; xpos
+    822	000004EC  0F B7	56 0C		   movzx edx,[word(esi+12)] ; ypos
+    823					   call	TabletToScreen c,eax,edx
+1   824	000004F0  52				 PUSH	 EDX
+1   825	000004F1  50				 PUSH	 EAX
+1   826	000004F2  E8 FFFFFDD5			 CALL	 TABLETTOSCREEN
+1   827	000004F7  83 C4	08			 ADD	 ESP,00008h
+    828	000004FA			 label WriteStylusEvent	near
+    829					 ; write emulated mouse	event
+    830					   call	WriteScreen c,[StylusMode]
+1   831	000004FA  FF 35	0000005Er		 PUSH	 [STYLUSMODE]
+1   832	00000500  E8 FFFFFE15			 CALL	 WRITESCREEN
+1   833	00000505  83 C4	04			 ADD	 ESP,00004h
+    834	00000508  EB 84			   jmp GetStylusEvent
+    835	0000050A			 endp StylusProcess
+    836
+    837	0000050A			 codeseg
+    838	0000050A			 proc dec2bin near
+    839					 ; decimal to binary
+    840	0000050A  2B C0			   sub eax,eax ; input
+    841	0000050C  2B D2			   sub edx,edx ; output
+    842	0000050E			 label ConvertInput near
+    843	0000050E  47			   inc edi ; next position
+    844	0000050F  8A 07			   mov al,[edi]	; digit
+    845					 ; convert decimal digit
+    846	00000511  3C 30			   cmp al,'0' ;	minimum
+    847	00000513  72 0E			   jb Enddec2bin ; done
+    848	00000515  3C 39			   cmp al,'9' ;	maximum
+    849	00000517  77 0A			   ja Enddec2bin ; done
+    850	00000519  2C 30			   sub al,'0' ;	digit
+    851	0000051B  8D 14	92		   lea edx,[edx*4+edx]
+    852	0000051E  8D 14	50		   lea edx,[edx*2+eax]
+    853	00000521  EB EB			   jmp ConvertInput
+    854	00000523			 label Enddec2bin Near
+    855					 ; return to caller
+Turbo Assembler	 Version 4.1	    10-03-15 18:07:22	    Page 16
+intuos.asm
+
+
+
+    856	00000523  C3			   ret ; return
+    857	00000524			 endp dec2bin
+    858
+    859	00000524			 codeseg
+    860	00000524			 proc MouseButtons c near
+    861					 uses ecx ; button index
+    862					 ; initialize button index
+1   863	00000524  51				 PUSH	 ECX
+1   864	00000525  2B C9			   sub ecx,ecx ; 1st button
+    865	00000527			 label UpdateButton near
+    866					 ; verify action index
+    867	00000527  47			   inc edi ; next position
+    868	00000528  0F B6	07		   movzx eax,[byte(edi)]
+    869	0000052B  3C 30			   cmp al,'0' ;	minimum
+    870	0000052D  72 16			   jb EndMouseButtons
+    871	0000052F  3C 37			   cmp al,'7' ;	maximum
+    872	00000531  77 12			   ja EndMouseButtons
+    873					 ; update logical button
+    874	00000533  24 07			   and al,07h ;	action index
+    875	00000535  66| 8B 44 46 1A	   mov ax,[esi+eax*2+scr.Action0]
+    876	0000053A  66| 89 44 4A 2C	   mov [edx+ecx*2+tbl.Button1],ax
+    877	0000053F  41			   inc ecx ; next button index
+    878	00000540  80 F9	03		   cmp cl,03h ;	last button
+    879	00000543  72 E2			   jb UpdateButton ; next
+    880	00000545			 label EndMouseButtons near
+    881					 ; return to caller
+1   882	00000545  59				 POP	 ECX
+1   883	00000546  C3				 RET	 00000h
+    884	00000547			 endp MouseButtons
+    885
+    886	00000547			 codeseg
+    887	00000547			 proc ProcessArguments near
+    888					 ; scan	for forward slash
+    889	00000547  8A 07			   mov al,[edi]	; character
+    890	00000549  47			   inc edi ; next position
+    891	0000054A  3C 00			   cmp al,00h ;	terminator
+    892	0000054C  0F 84	000000CC	   je EndScanString ; done
+    893	00000552  3C 2F			   cmp al,'/' ;	parameter
+    894	00000554  75 F1			   jne ProcessArguments
+    895					 ; allow upper/lower case
+    896	00000556  8A 07			   mov al,[edi]	; character
+    897	00000558  0C 20			   or al,20h; ignore case
+    898					 ; finger absolute mode
+    899	0000055A  3C 61			   cmp al,'a' ;	absolute
+    900	0000055C  75 09			   jne NotAbsoluteMode
+    901	0000055E  C6 05	0000005Ar 00	   mov [byte(FingerMode)],0
+    902	00000565  EB E0			   jmp ProcessArguments
+    903	00000567			 label NotAbsoluteMode near
+    904					 ; stylus button setting
+    905	00000567  3C 62			   cmp al,'b' ;	buttons
+    906	00000569  75 09			   jne NotStylusButton
+    907	0000056B  8B D1			   mov edx,ecx ; stylus
+    908	0000056D  E8 FFFFFFB2		   call	MouseButtons
+    909	00000572  EB D3			   jmp ProcessArguments
+    910	00000574			 label NotStylusButton near
+    911					 ; stylus correct circles
+    912	00000574  3C 63			   cmp al,'c' ;	circles
+Turbo Assembler	 Version 4.1	    10-03-15 18:07:22	    Page 17
+intuos.asm
+
+
+
+    913	00000576  75 09			   jne NotCircleMode
+    914	00000578  C6 05	0000001Dr 01	   mov [CircleMode],1
+    915	0000057F  EB C6			   jmp ProcessArguments
+    916	00000581			 label NotCircleMode near
+    917					 ; finger button setting
+    918	00000581  3C 6B			   cmp al,'k' ;	keys
+    919	00000583  75 09			   jne NotFingerButton
+    920	00000585  8B D3			   mov edx,ebx ; finger
+    921	00000587  E8 FFFFFF98		   call	MouseButtons
+    922	0000058C  EB B9			   jmp ProcessArguments
+    923	0000058E			 label NotFingerButton near
+    924					 ; left	handed mouse set
+    925	0000058E  3C 6C			   cmp al,'l' ;	lefty
+    926	00000590  75 09			   jne NotLeftHanded
+    927	00000592  C6 05	00000062r 01	   mov [ButtonMode],1
+    928	00000599  EB AC			   jmp ProcessArguments
+    929	0000059B			 label NotLeftHanded near
+    930					 ; stylus relative mode
+    931	0000059B  3C 6D			   cmp al,'m' ;	mouse
+    932	0000059D  75 09			   jne NotRelativeMode
+    933	0000059F  C6 05	0000005Er 01	   mov [byte(StylusMode)],1
+    934	000005A6			 label ProceszArguments	near
+    935					 ; intermediate	jump back
+    936	000005A6  EB 9F			   jmp ProcessArguments
+    937	000005A8			 label NotRelativeMode near
+    938					 ; tablet rotate setting
+    939	000005A8  3C 72			   cmp al,'r' ;	rotate
+    940	000005AA  75 09			   jne NotTabletRotate
+    941	000005AC  C6 05	0000008Dr 01	   mov [TabletRotate],1
+    942	000005B3  EB F1			   jmp ProceszArguments
+    943	000005B5			 label NotTabletRotate near
+    944					 ; initial touch setting
+    945	000005B5  3C 74			   cmp al,'t' ;	touch
+    946	000005B7  75 09			   jne NotSelectTouch
+    947	000005B9  C6 05	0000001Cr 01	   mov [SelectTouch],1
+    948	000005C0  EB E4			   jmp ProceszArguments
+    949	000005C2			 label NotSelectTouch near
+    950					 ; screen height setting
+    951	000005C2  3C 68			   cmp al,'h' ;	height
+    952	000005C4  75 2A			   jne NotScreenHeight
+    953	000005C6  E8 FFFFFF3F		   call	dec2bin	; convert
+    954					 ; verify screen height
+    955	000005CB  81 FA	00008000	   cmp edx,1024*32 ; max
+    956	000005D1  77 D3			   ja ProceszArguments
+    957	000005D3  83 FA	20		   cmp edx,1024/32 ; min
+    958	000005D6  72 CE			   jb ProceszArguments
+    959					 ; update tablet heights
+    960	000005D8  89 53	10		   mov [ebx+tbl.yMaxOut],edx
+    961	000005DB  89 51	10		   mov [ecx+tbl.yMaxOut],edx
+    962					 ; update screen heights
+    963	000005DE  66| 89 56 06		   mov [esi+scr.yMaxPos],dx
+    964	000005E2  89 56	0E		   mov [esi+scr.yMaxOut],edx
+    965	000005E5  D1 EA			   shr edx,1 ; center position
+    966	000005E7  89 56	16		   mov [esi+scr.yOutPos],edx
+    967	000005EA  66| 89 56 02		   mov [esi+scr.yCurPos],dx
+    968	000005EE  EB B6			   jmp ProceszArguments
+    969	000005F0			 label NotScreenHeight near
+Turbo Assembler	 Version 4.1	    10-03-15 18:07:22	    Page 18
+intuos.asm
+
+
+
+    970					 ; screen width	setting
+    971	000005F0  3C 77			   cmp al,'w' ;	width
+    972	000005F2  75 B2			   jne ProceszArguments
+    973	000005F4  E8 FFFFFF11		   call	dec2bin	; convert
+    974					 ; verify screen width
+    975	000005F9  81 FA	00008000	   cmp edx,1024*32 ; max
+    976	000005FF  77 A5			   ja ProceszArguments
+    977	00000601  83 FA	20		   cmp edx,1024/32 ; min
+    978	00000604  72 A0			   jb ProceszArguments
+    979					 ; update tablet widths
+    980	00000606  89 53	0C		   mov [ebx+tbl.xMaxOut],edx
+    981	00000609  89 51	0C		   mov [ecx+tbl.xMaxOut],edx
+    982					 ; update screen widths
+    983	0000060C  66| 89 56 08		   mov [esi+scr.xMaxPos],dx
+    984	00000610  89 56	0A		   mov [esi+scr.xMaxOut],edx
+    985	00000613  D1 EA			   shr edx,1 ; center position
+    986	00000615  89 56	12		   mov [esi+scr.xOutPos],edx
+    987	00000618  66| 89 56 04		   mov [esi+scr.xCurPos],dx
+    988	0000061C  EB 88			   jmp ProceszArguments
+    989	0000061E			 label EndScanString near
+    990					 ; return to caller
+    991	0000061E  C3			   ret ; return
+    992	0000061F			 endp ProcessArguments
+    993
+    994					 end MainRoutine
+Turbo Assembler	 Version 4.1	    10-03-15 18:07:22	    Page 19
+Symbol Table
+
+
+
+
+Symbol Name			  Type	 Value
+
+??DATE				  Text	 "10-03-15"
+??FILENAME			  Text	 "intuos  "
+??TIME				  Text	 "18:07:22"
+??VERSION			  Number 0401
+@32BIT				  Text	 1
+@@ARG				  Number [FLAT:EBP+0014]
+@@BYTESDONE			  Number [FLAT:EBP-0004]
+@@ENV				  Number [FLAT:EBP+0010]
+@@MOD				  Number [FLAT:EBP+0008]
+@@MOUSEMODE			  Number [FLAT:EBP+0008]
+@@NUL				  Number [FLAT:EBP+000C]
+@@PARAMETER			  Number [FLAT:EBP+0008]
+@@REASONCODE			  Number [FLAT:EBP+0008]
+@@XCURPOS			  Number [FLAT:EBP+0008]
+@@YCURPOS			  Number [FLAT:EBP+000C]
+@CODE				  Text	 FLAT
+@CODESIZE			  Text	 0
+@CPU				  Text	 1F9FH
+@CURSEG				  Text	 _TEXT
+@DATA				  Text	 FLAT
+@DATASIZE			  Text	 0
+@FILENAME			  Text	 INTUOS
+@INTERFACE			  Text	 00H
+@MODEL				  Text	 1
+@STACK				  Text	 FLAT
+@WORDSIZE			  Text	 4
+ACTIONTAKEN			  Dword	 FLAT:0000
+BADTABLETTHREAD			  Near	 FLAT:013F
+BUTTONMODE			  Byte	 FLAT:0062
+BYTESDONE			  Dword	 FLAT:0004
+CIRCLEMODE			  Byte	 FLAT:001D
+CONTROLTRANSFER			  Near	 FLAT:0260
+CONVERTINPUT			  Near	 FLAT:050E
+DEC2BIN				  Near	 FLAT:050A
+DOSCLOSE			  Near	 ----:---- Extern
+DOSCREATETHREAD			  Near	 ----:---- Extern
+DOSEXIT				  Near	 ----:---- Extern
+DOSEXITLIST			  Near	 ----:---- Extern
+DOSOPEN				  Near	 ----:---- Extern
+DOSSETPRIORITY			  Near	 ----:---- Extern
+DOSSLEEP			  Near	 ----:---- Extern
+DOSSUSPENDTHREAD		  Near	 ----:---- Extern
+DOSWRITE			  Near	 ----:---- Extern
+ENDBUTTON1			  Near	 FLAT:0163
+ENDBUTTON2			  Near	 FLAT:016A
+ENDBUTTON3			  Near	 FLAT:0171
+ENDBUTTONS			  Near	 FLAT:0171
+ENDDEC2BIN			  Near	 FLAT:0523
+ENDFILTERINDEX			  Near	 FLAT:01FC
+ENDMOUSEBUTTONS			  Near	 FLAT:0545
+ENDMOUSEMODE			  Near	 FLAT:034E
+ENDPOSITION			  Near	 FLAT:040A
+ENDPROCESS			  Near	 FLAT:00C1
+ENDPROPERASPECT			  Near	 FLAT:01CB
+Turbo Assembler	 Version 4.1	    10-03-15 18:07:22	    Page 20
+Symbol Table
+
+
+
+ENDRESETAVERAGE			  Near	 FLAT:01F3
+ENDROLSMOOTHX			  Near	 FLAT:0223
+ENDROLSMOOTHY			  Near	 FLAT:0253
+ENDROTATE			  Near	 FLAT:0389
+ENDROTATION			  Near	 FLAT:03FC
+ENDSCANSTRING			  Near	 FLAT:061E
+ENDXMAXTABLET			  Near	 FLAT:01A4
+ENDYMAXTABLET			  Near	 FLAT:01C0
+FHSCREEN			  Dword	 FLAT:0008
+FHTABLET			  Dword	 FLAT:000C
+FINGER				  Struct FLAT:00E4 FLT
+FINGERDONE			  Dword	 FLAT:0014
+FINGERMODE			  Dword	 FLAT:005A
+FINGERPROCESS			  Near	 FLAT:03A0
+FINGERTOMOUSEEVENT		  Near	 FLAT:0419
+GETDEVDESCRIPTOR		  Byte	 FLAT:001E
+GETFINGEREVENT			  Near	 FLAT:03C0
+GETFINGERINPUT			  Byte	 FLAT:008E
+GETSTYLUSEVENT			  Near	 FLAT:048E
+GETSTYLUSINPUT			  Byte	 FLAT:0140
+KEYROTATE			  Near	 FLAT:03F4
+MAINROUTINE			  Near	 FLAT:0000
+MOUSEACTIONS			  Near	 FLAT:014B
+MOUSEBUTTONS			  Near	 FLAT:0524
+NMAX				  Number 0008
+NOTABSOLUTEMODE			  Near	 FLAT:0567
+NOTCIRCLEMODE			  Near	 FLAT:0581
+NOTFINGERBUTTON			  Near	 FLAT:058E
+NOTLEFTHANDED			  Near	 FLAT:059B
+NOTOPENSCREENDRIVER		  Near	 FLAT:00C5
+NOTOPENTABLETDRIVER		  Near	 FLAT:00D3
+NOTPOSITION			  Near	 FLAT:0404
+NOTRELATIVEMODE			  Near	 FLAT:05A8
+NOTROTATE			  Near	 FLAT:0381
+NOTSCREENHEIGHT			  Near	 FLAT:05F0
+NOTSELECTTOUCH			  Near	 FLAT:05C2
+NOTSTYLUSBUTTON			  Near	 FLAT:0574
+NOTTABLETROTATE			  Near	 FLAT:05B5
+PROCESSARGUMENTS		  Near	 FLAT:0547
+PROCESSCOMPLETE			  Near	 FLAT:00DF
+PROCESZARGUMENTS		  Near	 FLAT:05A6
+PROPERASPECT			  Near	 FLAT:0172
+PUTFINGEREVENT			  Struct FLAT:00AA TBL
+PUTSCREENEVENT			  Struct FLAT:0063 SCR
+PUTSTYLUSEVENT			  Struct FLAT:0152 TBL
+RESETAVERAGE			  Near	 FLAT:01E3
+RESETSTYLUSEVENT		  Near	 FLAT:04C6
+ROLLINGAVERAGE			  Near	 FLAT:01CC
+SELECTTOUCH			  Byte	 FLAT:001C
+SETCONFIGURATION		  Byte	 FLAT:0038
+SETFEATUREREPORT		  Byte	 FLAT:0040
+STYLUS				  Struct FLAT:018C FLT
+STYLUSDONE			  Dword	 FLAT:0018
+STYLUSMODE			  Dword	 FLAT:005E
+STYLUSPROCESS			  Near	 FLAT:046E
+STYLUSTOMOUSEEVENT		  Near	 FLAT:04D4
+SWITCHTABLET			  Near	 FLAT:027E
+Turbo Assembler	 Version 4.1	    10-03-15 18:07:22	    Page 21
+Symbol Table
+
+
+
+SZSCREEN			  Byte	 FLAT:0000
+SZTABLET			  Byte	 FLAT:000E
+TABLETROTATE			  Byte	 FLAT:008D
+TABLETTHREAD			  Near	 FLAT:0119
+TABLETTOSCREEN			  Near	 FLAT:02CC
+TIDTABLET			  Dword	 FLAT:0010
+TYPESIZE			  Byte	 FLAT:004A
+UPDATEBUTTON			  Near	 FLAT:0527
+USEFINGEREVENT			  Near	 FLAT:03AD
+USEPOSITION			  Near	 FLAT:0318
+USESTYLUSEVENT			  Near	 FLAT:047B
+WRITEEVENT			  Near	 FLAT:0389
+WRITEFINGEREVENT		  Near	 FLAT:045B
+WRITESCREEN			  Near	 FLAT:031A
+WRITESTYLUSEVENT		  Near	 FLAT:04FA
+XMAXSCREEN			  Number 0500
+XPOSACCEPTED			  Near	 FLAT:0356
+XPOSNEWPOSITION			  Near	 FLAT:02EC
+XPOSPOSITIVE			  Near	 FLAT:0347
+XROLPOSITIVE			  Near	 FLAT:021C
+YMAXSCREEN			  Number 0320
+YPOSACCEPTED			  Near	 FLAT:035E
+YPOSNEWPOSITION			  Near	 FLAT:02FF
+YPOSPOSITIVE			  Near	 FLAT:034E
+YROLPOSITIVE			  Near	 FLAT:024C
+
+Structure Name			  Type	Offset
+
+FLT
+ FLTN				  Dword	 0000
+ USEN				  Dword	 0004
+ POSN				  Dword	 0008
+ SUMX				  Dword	 000C
+ SUMY				  Dword	 0010
+ TOTX				  Dword	 0014
+ TOTY				  Dword	 0018
+ VALX				  Dword	 001C
+ VALY				  Dword	 003C
+SCR
+ BTNEVNT			  Word	 0000
+ YCURPOS			  Word	 0002
+ XCURPOS			  Word	 0004
+ YMAXPOS			  Word	 0006
+ XMAXPOS			  Word	 0008
+ XMAXOUT			  Dword	 000A
+ YMAXOUT			  Dword	 000E
+ XOUTPOS			  Dword	 0012
+ YOUTPOS			  Dword	 0016
+ ACTION0			  Word	 001A
+ ACTION1			  Word	 001C
+ ACTION2			  Word	 001E
+ ACTION3			  Word	 0020
+ ACTION4			  Word	 0022
+ ACTION5			  Word	 0024
+ ACTION6			  Word	 0026
+ ACTION7			  Word	 0028
+TBL
+Turbo Assembler	 Version 4.1	    10-03-15 18:07:22	    Page 22
+Symbol Table
+
+
+
+ EVNTBT0			  Byte	 0000
+ EVNTBT1			  Byte	 0001
+ EVNTBT2			  Byte	 0002
+ EVNTBT3			  Byte	 0003
+ XMAXPOS			  Dword	 0004
+ YMAXPOS			  Dword	 0008
+ XMAXOUT			  Dword	 000C
+ YMAXOUT			  Dword	 0010
+ XMINOUT			  Dword	 0014
+ YMINOUT			  Dword	 0018
+ XNEWPOS			  Dword	 001C
+ YNEWPOS			  Dword	 0020
+ XOLDPOS			  Dword	 0024
+ YOLDPOS			  Dword	 0028
+ BUTTON1			  Word	 002C
+ BUTTON2			  Word	 002E
+ BUTTON3			  Word	 0030
+ XMAX0				  Word	 0032
+ YMAX0				  Word	 0034
+ XMAX1				  Word	 0036
+ YMAX1				  Word	 0038
+
+Groups & Segments		  Bit Size Align  Combine Class
+
+DGROUP				  Group
+  STACK				  32  2000 Para	  Stack	  STACK
+  _BSS				  32  001C Dword  Public  BSS
+  _DATA				  32  01E8 Dword  Public  DATA
+FLAT				  Group
+_TEXT				  32  061F Dword  Public  CODE
+

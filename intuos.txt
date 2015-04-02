@@ -1,0 +1,101 @@
+ÚÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ¿                                      ÚÄÄÄÄÄÄÄÄÄÄÄÄÄÄ¿
+³ Wacom Intuos for OS/2 ÃÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ´ INTUOS00.ZIP ³
+ÀÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÙ                                      ÀÄÄÄÄÄÄÄÄÄÄÄÄÄÄÙ
+
+ Use your Wacom Intuos tablet attached to an OS/2 (or eComStation) system.
+ Supports pen only on models CTH480, CTH680, CTL480 (only tested) and CTL680.
+ Supports working in absolute or relative mode. Made in Holland by Wim Brul.
+
+ Consists of INTUOS.TXT (this text file), USBECD.SYS (the input device driver),
+ XSMOUSE.SYS (the output device driver) and INTUOS.EXE (the support program).
+
+ May be freely used and exchanged, as long as it is not modified. You may
+ use this product solely at your own risk. I cannot be held responsible for
+ any damages occurring due to your using this product. You may not lease,
+ rent or sell this product to any other party. Have fun.
+
+ÚÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ¿
+³ Installation Instructions ÃÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+ÀÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÙ
+
+ Move the INTUOS00.ZIP file into a directory of your choice and unzip it. Copy
+ the INTUOS.EXE, USBECD.SYS and XSMOUSE.SYS files to your C:\OS2\BOOT directory.
+
+ Look into your CONFIG.SYS file to determine which mouse device driver has been
+ installed on your system. You may find AMOUSE.SYS or MOUSE.SYS and you need to
+ add the STYPE=XSMOUSE$ parameter to that device driver statement and to insert
+ the DEVICE=C:\OS2\BOOT\XSMOUSE.SYS device driver statement just above it.
+
+ Insert also the DEVICE=C:\OS2\BOOT\USBECD.SYS /D:056A:03##:01## /N:$INTUOS$
+ device driver statement and the RUN=C:\OS2\BOOT\INTUOS.EXE line below that.
+ After that restart your system and the fun begins.
+
+ÚÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ¿
+³ Operating Instructions ÃÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+ÀÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÙ
+
+ Attach your Wacom Intuos and wait for the beep.
+
+ The pen has 4 (CTH model) or 3 (CTL model) buttons.
+ Use the pen tip (1st pen button) as mouse button 1.
+ Use the lower pen button (2nd pen button) as mouse button 2.
+ Use the upper pen button (3rd pen button) as mouse button 3.
+
+ The expresskeys have no effect.
+
+ÚÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ¿
+³ Program Parameters ÃÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+ÀÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÙ
+
+ C:\OS2\BOOT\INTUOS.EXE /c /hN /wN /l /r /m
+
+ All parameters are optional and may be specified in upper or lower case.
+ Specify /c and the proper /hN and /wN parameters to work with precision.
+
+ /c - correct aspect ratio. Requires proper /hN and /wN parameters.
+ Reduces the active area on the tablet to match the display screen aspect ratio.
+ Specify this parameter to get circles on the screen from circles on the tablet.
+
+ /hN - height of the display screen in N pixels. Defaults to 800.
+ Specify this parameter to get precision. Valid values for N are 32 to 32768.
+
+ /wN - width of the display screen in N pixels. Defaults to 1280.
+ Specify this parameter to get precision. Valid values for N are 32 to 32768.
+
+ /l - mouse setup for left hand use. Default is mouse setup for right hand use.
+ Specify this parameter when the mouse setup page indicates left handed.
+
+ /r - expresskeys at the lower side. Default is expresskeys at the upper side.
+ Specify this parameter when the tablet has its expresskeys close to you.
+
+ /m - pen in relative mode. Default is pen in absolute mode.
+ Specify this parameter to move the pointer like a mouse.
+
+ÚÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ¿
+³ Special Parameter ÃÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+ÀÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÙ
+
+ /bNNN - Assign mouse buttons to pen buttons
+
+ ÚÄÄÄÂÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ¿
+ ³ N ³ valid assignment values     ³
+ ÃÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ´
+ ³ 0 ³ without mouse button action ³
+ ³ 1 ³ acts as mouse button 1      ³
+ ³ 2 ³ acts as mouse button 2      ³
+ ³ 3 ³ acts as mouse button 1+2    ³
+ ³ 4 ³ acts as mouse button 3      ³
+ ³ 5 ³ acts as mouse button 1+3    ³
+ ³ 6 ³ acts as mouse button 2+3    ³
+ ³ 7 ³ acts as mouse button 1+2+3  ³
+ ÀÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÙ
+
+ The 1st digit assigns mouse buttons to the 1st pen button.
+ The 2nd digit assigns mouse buttons to the 2nd pen button.
+ The 3rd digit assigns mouse buttons to the 3rd pen button.
+
+ Default value is /b124.
+ The pen tip acts as mouse button 1.
+ The lower pen button acts as mouse button 2.
+ The upper pen button acts as mouse button 3.
+

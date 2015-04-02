@@ -1,0 +1,43 @@
+ÚÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ¿                                     ÚÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ¿
+³ Wacom Intuos for OS/2 ÃÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ´ INTUOS00S.ZIP ³
+ÀÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÙ                                     ÀÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÙ
+
+ Use your Wacom Intuos tablet attached to an OS/2 (or eComStation) system.
+ Supports pen only on models CTH480, CTH680, CTL480 (only tested) and CTL680.
+ Supports working in absolute or relative mode. Made in Holland by Wim Brul.
+
+ ÚÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ¿
+ ³ Contains the source code of the Wacom Intuos for OS/2 support program. ³
+ ³ Contains 2 documentation files: intuos.doc (this file) and intuos.txt. ³
+ ÀÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÙ
+
+ May be freely used and exchanged. May be modified to suit your own individual
+ needs and purposes. You may use this product solely at your own risk. I cannot
+ be held responsible for any damages occurring due to your using this product.
+ You may not lease, rent or sell this product to any other party. Have fun.
+
+ÚÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ¿                                      ÚÄÄÄÄÄÄÄÄÄÄÄÄ¿
+³ Source Code Description ÃÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ´ intuos.doc ³
+ÀÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÙ                                      ÀÄÄÄÄÄÄÄÄÄÄÄÄÙ
+
+ The Wacom Intuos for OS/2 support program is a 32 bit OS/2 executable program.
+ It has been written in turbo assembler ideal mode using the flat memory model.
+ It has been compiled with Borland Turbo Assembler for OS/2 version 4.1 and
+ linked with Operating System/2 Linear Executable Linker version 2.02.001.
+
+ It consists of the following files:
+
+   intuos.asm - source code
+   intuos.def - definition file
+   intuos.exe - executable program
+   intuos.lst - listing file
+   intuos.mak - make file
+   intuos.map - map file
+   intuos.obj - object code
+
+ÚÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ¿                                    ÚÄÄÄÄÄÄÄÄÄÄÄÄ¿
+³ OS/2 Product Description  ÃÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ´ intuos.txt ³
+ÀÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÙ                                    ÀÄÄÄÄÄÄÄÄÄÄÄÄÙ
+
+ Contains the - Wacom Intuos for OS/2 - User Manual.
+
